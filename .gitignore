@@ -1,0 +1,6 @@
+# Ignore all the folders and contained files in the .gitignore file
+hezenv/
+__pycache__/
+heza.db
+.env
+migrations/
