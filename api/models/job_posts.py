@@ -18,6 +18,7 @@ class JobPost(db.Model):
     expires_on = db.Column(db.DateTime(timezone=True), nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=datetime.now)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    applicants = db.relationship('Application', backref='job_post', lazy=True)
 
     def __repr__(self):
         ''' Return a string representation of the job post.'''
