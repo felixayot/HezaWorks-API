@@ -22,9 +22,9 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
     api = Api(app, version='1.0', title='HezaWorks API', description='A REST API for employers and job seekers.')
-    api.add_namespace(jobs_namespace, path='/jobs')
-    api.add_namespace(auth_namespace, path='/auth')
-    api.add_namespace(main_namespace, path='/main')
+    api.add_namespace(jobs_namespace)
+    api.add_namespace(auth_namespace)
+    api.add_namespace(main_namespace)
     CORS(app)
     
     db.init_app(app)
