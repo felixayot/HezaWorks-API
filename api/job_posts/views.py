@@ -3,9 +3,10 @@ from api.utils.db import db
 from api.utils.jwt import jwt
 from api.models.job_posts import JobPost
 from api.models.users import User
+from api.models.applications import Application
 from api.auth.decorators import auth_role_required
 from werkzeug.exceptions import Unauthorized, BadRequest, Forbidden
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, current_user
 from http import HTTPStatus
 from datetime import datetime
 
@@ -20,14 +21,20 @@ jobposts_model=jobs_namespace.model('JobPost', {
     'requirements': fields.String(required=True, description='Job requirements'),
     'posted_at': fields.DateTime(description='Date and time the job was posted'),
     'expires_on': fields.DateTime(required=True, description='Date and time the job post expires'),
+    'applicants': fields.List(fields.String, description='Applicants for the job post'),
 })
 
+applications_model=jobs_namespace.model('JobApplications', {
+    'id': fields.Integer(description='Application ID'),
+    'job_id': fields.Integer(description='Job post title'),
+    'user_id': fields.Integer(description='Applicant username'),
+    'status': fields.String(description='Application status')
+})
 
 @jwt.user_lookup_loader
 def user_lookup_callback(_jwt_header, jwt_data):
     identity = jwt_data['sub']
     return User.query.filter_by(username=identity).one_or_none()
-
 
 
 @jobs_namespace.route('/posts')
@@ -64,8 +71,8 @@ class ProtectedJobpostRoutes(Resource):
             Create a new job post
         '''
         data = jobs_namespace.payload
-        username = get_jwt_identity()
-        current_user = User.query.filter_by(username=username).first()
+        #username = get_jwt_identity()
+        #current_user = User.query.filter_by(username=username).first()
         '''
         if not data['title'] or data['description'] \
             or data['requirements'] or data['expires_on']:
@@ -131,3 +138,58 @@ class ProtectedJobRUD(Resource):
             }, HTTPStatus.OK
         except Exception as e:
             raise Forbidden('You do not have sufficient roles to delete this job post.')
+
+
+@jobs_namespace.route('/posts/job/<int:id>/apply')
+class ApplyForJob(Resource):
+    @jwt_required()
+    def post(self, id):
+        '''
+            Apply for a job post
+        '''
+        job_to_apply = JobPost.get_job_by_id(id)
+        if job_to_apply.author == current_user:
+            raise BadRequest('You cannot apply for your own job post')
+        if Application.query.filter_by(job_post=job_to_apply, applicant=current_user).first():
+            raise BadRequest('You have already applied for this job post')
+        #if job_to_apply.expires_on < datetime.now():
+        #    raise BadRequest('This job post has expired')
+
+        applctn = Application(
+                job_post=job_to_apply,
+                applicant=current_user,
+            )
+        applctn.save()
+        return {
+                'message': 'Application successful',
+                'job_id': job_to_apply.id,
+                'job_title': job_to_apply.title,
+                'applicant': current_user.username,
+                'status': applctn.status.value
+            }, HTTPStatus.CREATED
+
+
+
+@jobs_namespace.route('/posts/job/<int:id>/applicants')
+class GetApplicants(Resource):
+    method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
+    @jobs_namespace.marshal_with(applications_model)
+    def get(self, id):
+        '''
+            Get all applicants for a job post
+        '''
+        job = JobPost.get_job_by_id(id)
+        applctns = Application.query.filter_by(job_post=job).all()
+        return applctns, HTTPStatus.OK
+    
+
+@jobs_namespace.route('/user/myposts')
+class GetJobpostsByUser(Resource):
+    method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
+    @jobs_namespace.marshal_with(jobposts_model)
+    def get(self):
+        '''
+            Get all job posts by a user
+        '''
+        jobs = current_user.jobposts
+        return jobs, HTTPStatus.OK
