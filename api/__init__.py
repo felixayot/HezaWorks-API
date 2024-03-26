@@ -7,6 +7,7 @@ from config import Config
 from flask_restx import Api
 from api.job_posts.views import jobs_namespace
 from api.auth.views import auth_namespace
+from api.main.views import main_namespace
 from api.utils.db import db
 from api.utils.jwt import jwt
 from werkzeug.exceptions import (
@@ -21,8 +22,9 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
     api = Api(app, version='1.0', title='HezaWorks API', description='A REST API for employers and job seekers.')
-    api.add_namespace(jobs_namespace)
+    api.add_namespace(jobs_namespace, path='/jobs')
     api.add_namespace(auth_namespace, path='/auth')
+    api.add_namespace(main_namespace, path='/main')
     CORS(app)
     
     db.init_app(app)
