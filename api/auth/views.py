@@ -118,6 +118,7 @@ class Login(Resource):
             refresh_token = create_refresh_token(identity=username)
             return {
                 'message': 'User login successful',
+                'user_id': user.id,
                 'roles': user_roles,
                 'access_token': access_token,
                 'refresh_token': refresh_token
@@ -197,3 +198,27 @@ class GetAllUsers(Resource):
         '''Get all users'''
         users = User.query.all()
         return users, HTTPStatus.OK
+
+
+@auth_namespace.route('/users/me')
+class UserAccount(Resource):
+    @jwt_required()
+    def get(self):
+        '''Get user account'''
+        user = User.query.filter_by(username=current_user.username).first()
+        user_roles=UserRole.query.filter_by(user_id=user.id).all()
+        user_roles=[role.role_id for role in user_roles]
+        full_name = user.first_name + ' ' + user.last_name
+        #return user, HTTPStatus.OK
+        return {
+            'message': 'User Account Details',
+            'userID': user.id,
+            'name': full_name,
+            'username': current_user.username,
+            'email': current_user.email,
+            'company': user.company,
+            'roles': user_roles,
+            'is_active': user.is_active,
+            'created_at': str(user.created_at),
+            'updated_at': str(user.updated_at)
+                }, HTTPStatus.OK
