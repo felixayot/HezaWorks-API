@@ -23,7 +23,8 @@ class User(db.Model):
     roles = db.relationship('Role', secondary='user_roles',
                             back_populates='users', lazy=True)
     applications = db.relationship('Application', backref='applicant', lazy=True)
-    
+    talent_profile = db.relationship('TalentProfile', backref='owner', lazy=True)
+
     def __repr__(self):
         ''' Return a string representation of a user.'''
         return '<User {}>'.format(self.username)
