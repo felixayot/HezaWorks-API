@@ -4,6 +4,7 @@ from api.utils.db import db
 from api.models.users import User
 from api.models.job_posts import JobPost
 from api.models.applications import Application
+from api.models.talent_profile import TalentProfile
 
 
 app = create_app()
@@ -14,5 +15,6 @@ def make_shell_context():
         'db': db,
         'User': User,
         'JobPost': JobPost,
-        'Application': Application
+        'Application': Application,
+        'TalentProfile': TalentProfile
         }
