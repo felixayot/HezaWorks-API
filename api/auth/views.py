@@ -4,6 +4,7 @@ from api.models.users import User
 from api.models.roles import Role
 from api.utils.jwt import jwt
 from api.models.user_roles import UserRole
+from api.models.talent_profile import TalentProfile
 from api.auth.decorators import auth_role_required
 from flask import request, jsonify
 from api.models.revoked_tokens import RevokedToken
@@ -59,6 +60,21 @@ user_model=auth_namespace.model('User', {
     'is_active': fields.Boolean(description='User is active'),
     'roles': fields.ClassName(UserRole, description='User assigned roles')
 })
+
+talentprofile_model=auth_namespace.model('TalentProfile', {
+    'user_id': fields.Integer(description='User ID'),
+    'resume': fields.String(required=True, description='User Resume'),
+    'phone_number': fields.String(required=True, description='User mobile phone number'),
+    'address': fields.String(required=True, description='User physical home address'),
+    'city': fields.String(required=True, description='User current city of residence'),
+    'education_level': fields.String(required=True, description='User highest level of education'),
+    'institution': fields.String(required=True, description='User institution where certification was obtained'),
+    'field': fields.String(required=True, description='User field of study'),
+    'employer': fields.String(required=True, description='User former or current employer'),
+    'title': fields.String(required=True, description='User title for former job'),
+    'responsibilities': fields.String(required=True, description='User responsibilities in former work place')
+})
+
 
 @auth_namespace.route('/signup')
 class SignUp(Resource):
@@ -222,3 +238,40 @@ class UserAccount(Resource):
             'created_at': str(user.created_at),
             'updated_at': str(user.updated_at)
                 }, HTTPStatus.OK
+
+
+@auth_namespace.route('/user/talentprofile')
+class CreateTalentProfile(Resource):
+    @auth_namespace.expect(talentprofile_model)
+    @auth_namespace.marshal_with(talentprofile_model)
+    @jwt_required()
+    def post(self):
+        data = auth_namespace.payload
+        try:
+            talentprofile = TalentProfile(
+                resume=data['resume'],
+                phone_number=data['phone_number'],
+                address=data['address'],
+                city=data['city'],
+                education_level=data['education_level'],
+                institution=data['institution'],
+                field=data['field'],
+                employer=data['employer'],
+                title=data['title'],
+                responsibilities=data['responsibilities'],
+                owner=current_user
+                )
+            talentprofile.save()
+            return talentprofile, HTTPStatus.CREATED
+        except Exception as e:
+            raise BadRequest('Failed. Missing data or invalid data input.') from e
+
+
+@auth_namespace.route('/users/talentlist')
+class GetAllTalentUsers(Resource):
+    method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
+    @auth_namespace.marshal_with(talentprofile_model)
+    def get(self):
+        '''Get all talent users'''
+        talent_users = TalentProfile.query.all()
+        return talent_users, HTTPStatus.OK
