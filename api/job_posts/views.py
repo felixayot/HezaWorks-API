@@ -71,6 +71,8 @@ class ProtectedJobpostRoutes(Resource):
             Create a new job post
         '''
         data = jobs_namespace.payload
+        if current_user.is_active == False:
+            raise Unauthorized('Your account is deactivated. Please contact the administrator.')
         #username = get_jwt_identity()
         #current_user = User.query.filter_by(username=username).first()
         '''
