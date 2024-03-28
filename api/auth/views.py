@@ -178,27 +178,29 @@ class Logout(Resource):
         }, HTTPStatus.OK
     
 
-@auth_namespace.route('/whois')
+@auth_namespace.route('/whois/<int:id>')
 class WhoIs(Resource):
     method_decorators = [auth_role_required(1), jwt_required()]
-    def get(self):
+    def get(self, id):
         '''
             Get user details
         '''
-        user_roles=UserRole.query.filter_by(user_id=current_user.id).all()
-        user_roles=[role.role_id for role in user_roles]
+        user = User.query.filter_by(id=id).first()
+        #user_roles=UserRole.query.filter_by(user_id=id).all()
+        user_roles=[role.id for role in user.roles]
         return {
             'message': 'User details retrieved successfully',
             'current user details': {
-                'username': current_user.username,
-                'email': current_user.email,
+                'username': user.username,
+                'email': user.email,
+                'is_active': user.is_active,
                 'roles': user_roles
                 }
             }, HTTPStatus.OK
 
 
 @auth_namespace.route('/users/recruiters')
-class GetAllUsers(Resource):
+class GetAllRecruiters(Resource):
     method_decorators = [auth_role_required(['super-admin', 'admin']), jwt_required()]
 
     @auth_namespace.marshal_with(user_model)
@@ -277,3 +279,46 @@ class GetAllTalentUsers(Resource):
         '''Get all talent users'''
         talent_users = TalentProfile.query.all()
         return talent_users, HTTPStatus.OK
+
+
+@auth_namespace.route('/users/newrecruiter/<int:id>')
+class ManageUser(Resource):
+    method_decorators = [auth_role_required([1, 2]), jwt_required()]
+    @auth_namespace.marshal_with(user_model)
+    def get(self, id):
+        '''Get a user by id'''
+        user = User.query.filter_by(id=id).first()
+        return user, HTTPStatus.OK
+
+    @auth_namespace.expect(user_model)
+    @auth_namespace.marshal_with(user_model)
+    def put(self, id):
+        '''Update a user by id'''
+        user = User.query.filter_by(id=id).first()
+        user.is_active = True
+        make_recruiter = UserRole(user_id=user.id, role_id=3)
+        make_recruiter.save()
+        user.save()
+        return user, HTTPStatus.OK
+
+
+    @auth_namespace.marshal_with(user_model)
+    def delete(self, id):
+        '''Delete a user by id'''
+        user = User.query.filter_by(id=id).first()
+        if not user:
+            raise BadRequest('User not found.')
+        user.delete()
+        return user, HTTPStatus.OK
+
+
+@auth_namespace.route('/users/deactivate/<int:id>')
+class DeactivateUser(Resource):
+    method_decorators = [auth_role_required([1, 2]), jwt_required()]
+    @auth_namespace.marshal_with(user_model)
+    def put(self, id):
+        '''Deactivate a user by id'''
+        user = User.query.filter_by(id=id).first()
+        user.is_active = False
+        user.save()
+        return user, HTTPStatus.OK
