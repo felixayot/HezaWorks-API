@@ -95,6 +95,8 @@ class SignUp(Resource):
                 company=data.get('company'),
                 password_hash=generate_password_hash(data.get('password'))
             )
+            if data.get('company'):
+                new_user.is_active = False
             new_user.save()
             role = Role.query.filter_by(slug='user').first()
             user_role = UserRole(user_id=new_user.id, role_id=role.id)
