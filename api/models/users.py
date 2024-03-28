@@ -43,6 +43,16 @@ class User(db.Model):
         ''' Save a user to the database.'''
         db.session.add(self)
         db.session.commit()
+    
+    def deactivate(self):
+        ''' Deactivate a user.'''
+        self.is_active = False
+        db.session.commit()
+
+    def activate(self):
+        ''' Activate a user.'''
+        self.is_active = True
+        db.session.commit()
 
     def delete(self):
         ''' Delete a user from the database.'''
