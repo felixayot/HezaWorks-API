@@ -152,6 +152,8 @@ class ApplyForJob(Resource):
         job_to_apply = JobPost.get_job_by_id(id)
         if job_to_apply.author == current_user:
             raise BadRequest('You cannot apply for your own job post')
+        if current_user.is_active == False:
+            raise Unauthorized('Your account is deactivated. Please contact the administrator.')
         if Application.query.filter_by(job_post=job_to_apply, applicant=current_user).first():
             raise BadRequest('You have already applied for this job post')
         #if job_to_apply.expires_on < datetime.now():
