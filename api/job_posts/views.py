@@ -1,11 +1,13 @@
 from flask_restx import Namespace, Resource, fields
+from flask import request
 from api.utils.db import db
 from api.utils.jwt import jwt
 from api.models.job_posts import JobPost
 from api.models.users import User
 from api.models.applications import Application
 from api.auth.decorators import auth_role_required
-from werkzeug.exceptions import Unauthorized, BadRequest, Forbidden
+from werkzeug.exceptions import (
+    Unauthorized, BadRequest, Forbidden, NotFound)
 from flask_jwt_extended import jwt_required, current_user
 from http import HTTPStatus
 from datetime import datetime
@@ -40,13 +42,27 @@ def user_lookup_callback(_jwt_header, jwt_data):
 @jobs_namespace.route('/posts')
 class GetJobposts(Resource):
     '''Class for Jobposts endpoint.'''
-    @jobs_namespace.marshal_with(jobposts_model)
     def get(self):
         '''
             Get all job posts
         '''
-        jobs = JobPost.query.all()
-        return jobs, HTTPStatus.OK
+        posts = []
+        page = request.args.get('page', 1, type=int)
+        try:
+            jobs = JobPost.query.order_by(JobPost.posted_at.desc()).paginate(page=page, per_page=4)
+            for j in jobs:
+                posts.append({
+                    'id': j.id,
+                    'title': j.title,
+                    'organization': j.organization,
+                    'description': j.description,
+                    'requirements': j.requirements,
+                    'posted_at': j.posted_at.strftime('%m-%d-%Y'),
+                    'expires_on': j.expires_on.strftime('%m-%d-%Y')
+                })
+            return posts, HTTPStatus.OK
+        except Exception as e:
+            raise NotFound('No job posts found') from e
 
 
 @jobs_namespace.route('/posts/job/<int:id>')
@@ -166,6 +182,7 @@ class ApplyForJob(Resource):
         applctn.save()
         return {
                 'message': 'Application successful',
+                'application_id': applctn.id,
                 'job_id': job_to_apply.id,
                 'job_title': job_to_apply.title,
                 'applicant': current_user.username,
@@ -177,23 +194,92 @@ class ApplyForJob(Resource):
 @jobs_namespace.route('/posts/job/<int:id>/applicants')
 class GetApplicants(Resource):
     method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
-    @jobs_namespace.marshal_with(applications_model)
     def get(self, id):
         '''
             Get all applicants for a job post
         '''
+        apps = []
         job = JobPost.get_job_by_id(id)
         applctns = Application.query.filter_by(job_post=job).all()
-        return applctns, HTTPStatus.OK
+        for a in applctns:
+            apps.append({
+                'application_id': a.id,
+                'job_id': a.job_id,
+                'job_title': a.job_post.title,
+                'applicant': a.applicant.email,
+                'status': a.status.value,
+                'applied_at': a.applied_at.strftime('%m-%d-%Y')
+            })
+        return apps, HTTPStatus.OK
     
 
 @jobs_namespace.route('/user/myposts')
 class GetJobpostsByUser(Resource):
     method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
-    @jobs_namespace.marshal_with(jobposts_model)
     def get(self):
         '''
             Get all job posts by a user
         '''
+        page = request.args.get('page', 1, type=int)
+        posts = []
+        try:
+            jobs = JobPost.query.filter_by(author=current_user).\
+                order_by(JobPost.posted_at.desc()).\
+                    paginate(page=page, per_page=4)
+            for j in jobs:
+                posts.append({
+                    'id': j.id,
+                    'title': j.title,
+                    'description': j.description,
+                    'requirements': j.requirements,
+                    'posted_at': j.posted_at.strftime('%m-%d-%Y'),
+                    'expires_on': j.expires_on.strftime('%m-%d-%Y')
+                    })
+            return posts, HTTPStatus.OK
+        except Exception as e:
+            raise NotFound('No job posts found') from e
+
+
+@jobs_namespace.route('/user/allapplicants')
+class GetAllApplicants(Resource):
+    method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
+    def get(self):
+        '''
+            Get all job applications to all jobs for a single user.
+        '''
         jobs = current_user.jobposts
-        return jobs, HTTPStatus.OK
+        applications = []
+        job_applicants = []
+        for j in jobs:
+            applications.append(j.applicants)
+        for applicants in applications:
+            for a in applicants:
+                job_applicants.append({
+                    'application_id': a.id,
+                    'job_id': a.job_id,
+                    'title': a.job_post.title,
+                    'applicant': a.applicant.email,
+                    'status': a.status.value,
+                    'applied_at': a.applied_at.strftime('%m-%d-%Y')
+                })
+        return job_applicants, HTTPStatus.OK
+
+
+@jobs_namespace.route('/user/myapplications')
+class GetApplicationsByUser(Resource):
+    @jwt_required()
+    def get(self):
+        '''
+            Get all job applications for a user
+        '''
+        myapps = []
+        applctns = current_user.applications
+        for a in applctns:
+            myapps.append({
+                'application_id': a.id,
+                'job_id': a.job_post.id,
+                'job_title': a.job_post.title,
+                'status': a.status.value,
+                'applied_at': a.applied_at.strftime('%m-%d-%Y')
+            })
+        return myapps, HTTPStatus.OK

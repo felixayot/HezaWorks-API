@@ -143,8 +143,10 @@ class Login(Resource):
             }, HTTPStatus.OK
         if not check_password_hash(user.password_hash, password):
             raise Unauthorized('Invalid username or password.')
+        '''
         if not user.is_active:
             raise Unauthorized('User is not active.')
+        '''
 
 
 @auth_namespace.route('/refresh')
@@ -277,6 +279,8 @@ class GetAllTalentUsers(Resource):
     @auth_namespace.marshal_with(talentprofile_model)
     def get(self):
         '''Get all talent users'''
+        if current_user.is_active == False:
+            raise Unauthorized('User is not active.')
         talent_users = TalentProfile.query.all()
         return talent_users, HTTPStatus.OK
 
