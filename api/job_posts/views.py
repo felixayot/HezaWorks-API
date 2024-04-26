@@ -4,7 +4,7 @@ from api.utils.db import db
 from api.utils.jwt import jwt
 from api.models.job_posts import JobPost
 from api.models.users import User
-from api.models.applications import Application
+from api.models.applications import Application, Status
 from api.auth.decorators import auth_role_required
 from werkzeug.exceptions import (
     Unauthorized, BadRequest, Forbidden, NotFound)
@@ -168,19 +168,19 @@ class ApplyForJob(Resource):
         job_to_apply = JobPost.get_job_by_id(id)
         if job_to_apply.author == current_user:
             raise BadRequest('You cannot apply for your own job post')
-        if current_user.is_active == False:
+        elif current_user.is_active == False:
             raise Unauthorized('Your account is deactivated. Please contact the administrator.')
-        if Application.query.filter_by(job_post=job_to_apply, applicant=current_user).first():
+        elif Application.query.filter_by(job_id=id, user_id=current_user.id).one_or_none():
             raise BadRequest('You have already applied for this job post')
-        #if job_to_apply.expires_on < datetime.now():
-        #    raise BadRequest('This job post has expired')
-
-        applctn = Application(
+            #if job_to_apply.expires_on < datetime.now():
+            # raise BadRequest('This job post has expired')
+        else:
+            applctn = Application(
                 job_post=job_to_apply,
                 applicant=current_user,
             )
-        applctn.save()
-        return {
+            applctn.save()
+            return {
                 'message': 'Application successful',
                 'application_id': applctn.id,
                 'job_id': job_to_apply.id,
@@ -188,7 +188,6 @@ class ApplyForJob(Resource):
                 'applicant': current_user.username,
                 'status': applctn.status.value
             }, HTTPStatus.CREATED
-
 
 
 @jobs_namespace.route('/posts/job/<int:id>/applicants')
@@ -283,3 +282,85 @@ class GetApplicationsByUser(Resource):
                 'applied_at': a.applied_at.strftime('%m-%d-%Y')
             })
         return myapps, HTTPStatus.OK
+
+
+@jobs_namespace.route('/user/applications/<int:id>')
+class GetApplicationById(Resource):
+    @jwt_required()
+    def get(self, id):
+        '''
+            Get an application by id
+        '''
+        application = Application.query.filter_by(id=id).first()
+        if not application:
+            raise NotFound('Application not found')
+        return {
+            'application_id': application.id,
+            'job_id': application.job_id,
+            'job_title': application.job_post.title,
+            'applicant': application.applicant.email,
+            'status': application.status.value,
+            'applied_at': application.applied_at.strftime('%m-%d-%Y')
+        }, HTTPStatus.OK
+
+
+@jobs_namespace.route('/user/applicants/<int:id>')
+class ManageApplications(Resource):
+    method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
+
+    def get(self, id):
+        '''
+            Get an application by id
+        '''
+        if not current_user:
+            raise Unauthorized('You are not perform this action. Please login.')
+        application = Application.query.filter_by(id=id).first()
+        if not application:
+            raise NotFound('Application not found')
+        return {
+            'application_id': application.id,
+            'job_id': application.job_id,
+            'job_title': application.job_post.title,
+            'applicant': application.applicant.email,
+            'status': application.status.value,
+            'applied_at': application.applied_at.strftime('%m-%d-%Y')
+        }, HTTPStatus.OK
+
+    @jobs_namespace.expect(applications_model)
+    def put(self, id):
+        '''
+            Update an application status
+        '''
+        application = Application.query.filter_by(id=id).first()
+        data = jobs_namespace.payload
+        try:
+            if data['status'] == 'In Progress' or 'in progress':
+                in_progress_str = data['status']
+                in_progress = in_progress_str.replace(' ', '_')
+                ip_status = Status[in_progress.upper()]
+                application.status = ip_status
+            else:
+                status_str = data['status']
+                upp_status = Status[status_str.upper()]
+                application.status = upp_status
+            application.status = application.status
+            db.session.commit()
+
+            return {
+                'message': 'Application status updated successfully'
+            }, HTTPStatus.OK
+        except Exception as e:
+            print(e)
+
+    def delete(self, id):
+        '''
+            Delete an application
+        '''
+        application = Application.query.filter_by(id=id).first()
+        try:
+            application.delete()
+            return {
+                'message': 'Application deleted successfully'
+            }, HTTPStatus.OK
+        except Exception as e:
+            raise Forbidden('You do not have sufficient roles to delete this application.') from e

@@ -3,7 +3,6 @@ import os
 from dotenv import load_dotenv
 from datetime import timedelta
 
-
 basedir = os.path.abspath(os.path.dirname(__file__))
 load_dotenv(os.path.join(basedir, ".env"))
 
@@ -20,5 +19,5 @@ class Config(object):
     MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
     MAIL_USE_TLS = True
     JWT_SECRET_KEY = os.getenv("JWT_SECRET KEY")
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=60)
-    JWT_REFRESH_TOKEN_EXPIRES = timedelta(minutes=60)
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES")))
+    JWT_REFRESH_TOKEN_EXPIRES = timedelta(seconds=int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES")))

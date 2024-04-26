@@ -81,6 +81,7 @@ class SignUp(Resource):
     ''' Resource for user signup. '''
     @auth_namespace.expect(signup_model)
     @auth_namespace.marshal_with(user_model)
+    @auth_namespace.doc(description='Create a new user')
     def post(self):
         '''
             Create a new user
@@ -117,6 +118,7 @@ class SignUp(Resource):
 class Login(Resource):
     ''' Resource for user login. '''
     @auth_namespace.expect(login_model)
+    @auth_namespace.doc(description='Log in a user')
     def post(self):
         '''
             Log in a user
@@ -153,6 +155,7 @@ class Login(Resource):
 class Refresh(Resource):
 
     @jwt_required(refresh=True)
+    @auth_namespace.doc(description='Refresh a user token')
     def post(self):
         '''
             Refresh a user token
@@ -168,6 +171,7 @@ class Refresh(Resource):
 class Logout(Resource):
 
     @jwt_required()
+    @auth_namespace.doc(description='Log out a user')
     def post(self):
         '''
             Log out a user
@@ -183,6 +187,8 @@ class Logout(Resource):
 @auth_namespace.route('/whois/<int:id>')
 class WhoIs(Resource):
     method_decorators = [auth_role_required(1), jwt_required()]
+
+    @auth_namespace.doc(description='Get user details', params={'id': 'User ID'})
     def get(self, id):
         '''
             Get user details
@@ -206,6 +212,7 @@ class GetAllRecruiters(Resource):
     method_decorators = [auth_role_required([1, 2]), jwt_required()]
 
     @auth_namespace.marshal_with(user_model)
+    @auth_namespace.doc(description='Get all recruiters')
     def get(self):
         '''Get all users'''
         users = User.query.filter_by(roles=['recruiter']).all()
@@ -216,6 +223,7 @@ class GetAllRecruiters(Resource):
 class GetAllUsers(Resource):
     method_decorators = [auth_role_required('super-admin'), jwt_required()]
 
+    @auth_namespace.doc(description='Get all users')
     def get(self):
         '''Get all users'''
         users = User.query.all()
@@ -225,6 +233,7 @@ class GetAllUsers(Resource):
 @auth_namespace.route('/users/me')
 class UserAccount(Resource):
     @jwt_required()
+    @auth_namespace.doc(description='Get user account')
     def get(self):
         '''Get user account'''
         user = User.query.filter_by(username=current_user.username).first()
@@ -250,6 +259,7 @@ class UserAccount(Resource):
 class CreateTalentProfile(Resource):
     @auth_namespace.expect(talentprofile_model)
     @auth_namespace.marshal_with(talentprofile_model)
+    @auth_namespace.doc(description='Create a talent profile')
     @jwt_required()
     def post(self):
         data = auth_namespace.payload
@@ -276,7 +286,9 @@ class CreateTalentProfile(Resource):
 @auth_namespace.route('/users/talentlist')
 class GetAllTalentUsers(Resource):
     method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
+
     @auth_namespace.marshal_with(talentprofile_model)
+    @auth_namespace.doc(description='Get all talent users')
     def get(self):
         '''Get all talent users'''
         if current_user.is_active == False:
@@ -289,8 +301,9 @@ class GetAllTalentUsers(Resource):
 class ManageUser(Resource):
     method_decorators = [auth_role_required([1, 2]), jwt_required()]
     @auth_namespace.marshal_with(user_model)
+    @auth_namespace.doc(description='Make a user a recruiter by id', params={'id': 'User ID'})
     def put(self, id):
-        '''Update a user by id'''
+        '''Make a user a recruiter by id'''
         user = User.query.filter_by(id=id).first()
         user.is_active = True
         make_recruiter = UserRole(user_id=user.id, role_id=3)
@@ -303,8 +316,9 @@ class ManageUser(Resource):
 class MakeAdmin(Resource):
     method_decorators = [auth_role_required(1), jwt_required()]
     @auth_namespace.marshal_with(user_model)
+    @auth_namespace.doc(description='Make a user an admin by id', params={'id': 'A user ID'})
     def put(self, id):
-        '''Update a user by id'''
+        '''Make a user an admin by id'''
         user = User.query.filter_by(id=id).first()
         make_recruiter = UserRole(user_id=user.id, role_id=2)
         make_recruiter.save()
@@ -316,6 +330,7 @@ class MakeAdmin(Resource):
 class DeactivateUser(Resource):
     method_decorators = [auth_role_required([1, 2]), jwt_required()]
     @auth_namespace.marshal_with(user_model)
+    @auth_namespace.doc(description='Deactivate a user by id', params={'id': 'A user ID'})
     def put(self, id):
         '''Deactivate a user by id'''
         user = User.query.filter_by(id=id).first()
@@ -328,6 +343,7 @@ class DeactivateUser(Resource):
 class ActivateUser(Resource):
     method_decorators = [auth_role_required([1, 2]), jwt_required()]
     @auth_namespace.marshal_with(user_model)
+    @auth_namespace.doc(description='Activate a user by id', params={'id': 'A user ID'})
     def put(self, id):
         '''Activate a user by id'''
         user = User.query.filter_by(id=id).first()
@@ -340,6 +356,7 @@ class ActivateUser(Resource):
 class DeleteUser(Resource):
     method_decorators = [auth_role_required(1), jwt_required()]
     @auth_namespace.marshal_with(user_model)
+    @auth_namespace.doc(description='Delete a user by id', params={'id': 'A user ID'})
     def delete(self, id):
         '''Delete a user by id'''
         user = User.query.filter_by(id=id).first()
