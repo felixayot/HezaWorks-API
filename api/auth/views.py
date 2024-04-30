@@ -415,7 +415,7 @@ class GetAllTalentUsers(Resource):
                     'name': p.owner.first_name + ' ' + p.owner.last_name,
                     'email': p.owner.email,
                     'resume': p.resume,
-                    'phone:': p.phone_number,
+                    'phone': p.phone_number,
                     'city': p.city,
                     'education_level': p.education_level,
                     'institution': p.institution,
