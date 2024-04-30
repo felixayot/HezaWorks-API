@@ -9,7 +9,9 @@ from api.auth.decorators import auth_role_required
 from flask import request, jsonify
 from api.models.revoked_tokens import RevokedToken
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.exceptions import Conflict, BadRequest, Unauthorized
+from werkzeug.exceptions import (
+    Conflict, BadRequest, Unauthorized,
+    NotFound)
 from http import HTTPStatus
 from flask_jwt_extended import (
     create_access_token,
@@ -262,7 +264,19 @@ class CreateTalentProfile(Resource):
     @auth_namespace.doc(description='Create a talent profile')
     @jwt_required()
     def post(self):
+        if current_user.is_active == False:
+            raise Unauthorized('User is not active.')
+
         data = auth_namespace.payload
+        if not data:
+            raise BadRequest('No data provided.')
+        if not data['resume'] or not data['phone_number'] \
+            or not data['address'] or not data['city'] \
+                or not data['education_level'] \
+                    or not data['institution'] or not data['field'] \
+                        or not data['employer'] or not data['title'] \
+                            or not data['responsibilities']:
+            raise BadRequest('Missing data.')
         try:
             talentprofile = TalentProfile(
                 resume=data['resume'],
@@ -280,21 +294,97 @@ class CreateTalentProfile(Resource):
             talentprofile.save()
             return talentprofile, HTTPStatus.CREATED
         except Exception as e:
-            raise BadRequest('Failed. Missing data or invalid data input.') from e
+            raise BadRequest('Failed to create profile.') from e
+
+    @auth_namespace.marshal_with(talentprofile_model)
+    @auth_namespace.doc(description='Get a talent profile')
+    @jwt_required()
+    def get(self):
+        '''Get user talent profile'''
+
+        talentprofile = TalentProfile.query.filter_by(user_id=current_user.id).one_or_none()
+        return talentprofile, HTTPStatus.OK
+
+    @auth_namespace.expect(talentprofile_model)
+    @auth_namespace.marshal_with(talentprofile_model)
+    @auth_namespace.doc(description='Create a talent profile')
+    @jwt_required()
+    def put(self):
+        '''Update a talent profile'''
+
+        if current_user.is_active == False:
+            raise Unauthorized('User is not active.')
+
+        profile_to_update = TalentProfile.query.filter_by(user_id=current_user.id).one_or_none()
+        data = auth_namespace.payload
+        try:
+            if data['resume']:
+                profile_to_update.resume = data['resume']
+            profile_to_update.resume = profile_to_update.resume
+            if data['phone_number']:
+                profile_to_update.phone_number = data['phone_number']
+            profile_to_update.phone_number = profile_to_update.phone_number
+            if data['address']:
+                profile_to_update.address = data['address']
+            profile_to_update.address = profile_to_update.address
+            if data['city']:
+                profile_to_update.city = data['city']
+            profile_to_update.city = profile_to_update.city
+            if data['education_level']:
+                profile_to_update.education_level = data['education_level']
+            profile_to_update.education_level = profile_to_update.education_level
+            if data['institution']:
+                profile_to_update.institution = data['institution']
+            profile_to_update.institution = profile_to_update.institution
+            if data['field']:
+                profile_to_update.field = data['field']
+            profile_to_update.field = profile_to_update.field
+            if data['employer']:
+                profile_to_update.employer = data['employer']
+            profile_to_update.employer = profile_to_update.employer
+            if data['title']:
+                profile_to_update.title = data['title']
+            profile_to_update.title = profile_to_update.title
+            if data['responsibilities']:
+                profile_to_update.responsibilities = data['responsibilities']
+            profile_to_update.responsibilities = profile_to_update.responsibilities
+            profile_to_update.save()
+            return profile_to_update, HTTPStatus.OK
+        except Exception as e:
+            raise BadRequest('Failed to update profile.') from e
 
 
 @auth_namespace.route('/users/talentlist')
 class GetAllTalentUsers(Resource):
     method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
 
-    @auth_namespace.marshal_with(talentprofile_model)
     @auth_namespace.doc(description='Get all talent users')
     def get(self):
         '''Get all talent users'''
         if current_user.is_active == False:
             raise Unauthorized('User is not active.')
-        talent_users = TalentProfile.query.all()
-        return talent_users, HTTPStatus.OK
+        talents = []
+        page = request.args.get('page', 1, type=int)
+        try:
+            profiles = TalentProfile.query.paginate(page=page, per_page=6)
+            for p in profiles:
+                talents.append({
+                    'id': p.user_id,
+                    'name': p.owner.first_name + ' ' + p.owner.last_name,
+                    'email': p.owner.email,
+                    'resume': p.resume,
+                    'phone:': p.phone_number,
+                    'city': p.city,
+                    'education_level': p.education_level,
+                    'institution': p.institution,
+                    'field': p.field,
+                    'employer': p.employer,
+                    'title': p.title,
+                    'responsibilities': p.responsibilities
+                })
+            return talents, HTTPStatus.OK
+        except Exception as e:
+            raise NotFound('No talent profiles found') from e
 
 
 @auth_namespace.route('/users/newrecruiter/<int:id>')
@@ -334,8 +424,7 @@ class DeactivateUser(Resource):
     def put(self, id):
         '''Deactivate a user by id'''
         user = User.query.filter_by(id=id).first()
-        user.is_active = False
-        user.save()
+        user.deactivate()
         return user, HTTPStatus.OK
 
 
@@ -347,8 +436,7 @@ class ActivateUser(Resource):
     def put(self, id):
         '''Activate a user by id'''
         user = User.query.filter_by(id=id).first()
-        user.is_active = True
-        user.save()
+        user.activate()
         return user, HTTPStatus.OK
     
 

@@ -21,7 +21,7 @@ def create_app(config_class=Config):
     ''' Create an instance of the Flask app. '''
     app = Flask(__name__)
     app.config.from_object(config_class)
-    api = Api(app, version='1.0', title='HezaWorks API', description='A REST API for employers and job seekers.')
+    api = Api(app, version='1.0', title='HezaWorks API', description='A REST API for recruiters and job seekers.')
     api.add_namespace(jobs_namespace)
     api.add_namespace(auth_namespace)
     api.add_namespace(main_namespace)

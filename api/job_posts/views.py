@@ -7,11 +7,11 @@ from api.models.users import User
 from api.models.applications import Application, Status
 from api.auth.decorators import auth_role_required
 from werkzeug.exceptions import (
-    Unauthorized, BadRequest, Forbidden, NotFound)
+    Unauthorized, BadRequest, Forbidden, NotFound
+    )
 from flask_jwt_extended import jwt_required, current_user
 from http import HTTPStatus
 from datetime import datetime
-
 
 jobs_namespace=Namespace('jobs', description="a namespace for job posts")
 
@@ -219,6 +219,10 @@ class GetJobpostsByUser(Resource):
         '''
             Get all job posts by a user
         '''
+        if not current_user:
+            return {
+                'message': 'You are not perform this action. Please login.'
+            }#, HTTPStatus.UNAUTHORIZED
         page = request.args.get('page', 1, type=int)
         posts = []
         try:
@@ -291,6 +295,10 @@ class GetApplicationById(Resource):
         '''
             Get an application by id
         '''
+        if not current_user:
+            return {
+                'message': 'You are not perform this action. Please login.'
+            }, HTTPStatus.UNAUTHORIZED
         application = Application.query.filter_by(id=id).first()
         if not application:
             raise NotFound('Application not found')
