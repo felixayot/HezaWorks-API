@@ -6,7 +6,7 @@ from api.utils.jwt import jwt
 from api.models.user_roles import UserRole
 from api.models.talent_profile import TalentProfile
 from api.auth.decorators import auth_role_required
-from flask import request, jsonify
+from flask import request
 from api.models.revoked_tokens import RevokedToken
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.exceptions import (
@@ -256,6 +256,46 @@ class UserAccount(Resource):
             'updated_at': str(user.updated_at)
                 }, HTTPStatus.OK
 
+    @auth_namespace.expect(signup_model)
+    @auth_namespace.doc(description='Update user account details')
+    @jwt_required()
+    def put(self):
+        '''Update user account details'''
+        user = User.query.filter_by(username=current_user.username).first()
+        data = signup_model.payload
+        try:
+            if data['first_name']:
+                # user.first_name = data['first_name']
+                user.first_name = user.first_name
+            if data['last_name']:
+                # user.last_name = data['last_name']
+                user.last_name = user.last_name
+            if data['email']:
+                # Check if input email already exists
+                input_email=User.query.filter_by(email=data['email']).one_or_none()
+                # If so(as in input email already exists), check if it is the same
+                # as the current user email, if not, raise a Conflict Error
+                if input_email and input_email != user.email:
+                    raise Conflict('User with email already exists.')
+                # If input email does not exist, update the user email
+                user.email = data['email']
+            user.email = user.email
+            if data['username']:
+                input_username=User.query.filter_by(username=data['username']).one_or_none()
+                if input_username and input_username != user.username:
+                    raise Conflict('User with username already exists.')
+                user.username = data['username']
+            user.username = user.username
+            if data['company']:
+                # user.company = data['company']
+                user.company = user.company
+            if data['password']:
+                user.password_hash = generate_password_hash(data['password'])
+            user.save()
+            return user, HTTPStatus.OK
+        except Exception as e:
+            raise BadRequest('Failed to update user account details.') from e
+
 
 @auth_namespace.route('/user/talentprofile')
 class CreateTalentProfile(Resource):
@@ -301,9 +341,11 @@ class CreateTalentProfile(Resource):
     @jwt_required()
     def get(self):
         '''Get user talent profile'''
-
-        talentprofile = TalentProfile.query.filter_by(user_id=current_user.id).one_or_none()
-        return talentprofile, HTTPStatus.OK
+        try:
+            talentprofile = TalentProfile.query.filter_by(user_id=current_user.id).one_or_none()
+            return talentprofile, HTTPStatus.OK
+        except:
+            raise NotFound('Profile Not Found.')
 
     @auth_namespace.expect(talentprofile_model)
     @auth_namespace.marshal_with(talentprofile_model)
