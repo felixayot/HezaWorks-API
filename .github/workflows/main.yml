@@ -1,0 +1,11 @@
+##
+# This is the configuration management tool for the automation of the
+# CI/CD for HezaWorks API
+
+# !/usr/bin/env bash
+# Push new changes available in the master branch
+# to the production server
+
+# $ ssh -i private_key_path_name server_user@server_ip_address
+# $ cd HezaWorks-API && git pull
+# $ sudo service supervisor reload
