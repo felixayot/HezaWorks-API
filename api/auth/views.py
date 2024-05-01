@@ -209,6 +209,41 @@ class WhoIs(Resource):
             }, HTTPStatus.OK
 
 
+@auth_namespace.route('/users/admins')
+class GetAllAdmins(Resource):
+    method_decorators = [auth_role_required(1), jwt_required()]
+
+    @auth_namespace.marshal_with(user_model)
+    @auth_namespace.doc(description='Get all admins')
+    def get(self):
+        '''Get all admins'''
+        # admins = []
+        # roles = []
+        # slugs = []
+        # users = User.query.all()
+        # for user in users:
+        #     roles.append(user.roles)
+        #     for role in roles:
+        #         for r in role:
+        #             slugs.append(r.slug)
+        #             if 'admin' in slugs:
+        #                 admins.append(user)
+        admins=User.query.filter(User.roles.any(slug='admin')).all()
+        return admins, HTTPStatus.OK
+
+
+@auth_namespace.route('/users/inactive')
+class GetAllInactive(Resource):
+    method_decorators = [auth_role_required([1, 2]), jwt_required()]
+
+    @auth_namespace.marshal_with(user_model)
+    @auth_namespace.doc(description='Get all inactive users')
+    def get(self):
+        '''Get all inactive users.'''
+        inactive=User.query.filter_by(is_active=False).all()
+        return inactive, HTTPStatus.OK
+
+
 @auth_namespace.route('/users/recruiters')
 class GetAllRecruiters(Resource):
     method_decorators = [auth_role_required([1, 2]), jwt_required()]
@@ -216,20 +251,44 @@ class GetAllRecruiters(Resource):
     @auth_namespace.marshal_with(user_model)
     @auth_namespace.doc(description='Get all recruiters')
     def get(self):
-        '''Get all users'''
-        users = User.query.filter_by(roles=['recruiter']).all()
-        return users, HTTPStatus.OK
+        '''Get all recruiters'''
+        # recruiters = []
+        # roles = []
+        # slugs = []
+        # user_roles = []
+        # users = User.query.all()
+        # for user in users:
+        #     roles.append(user.roles)
+        #     for role in roles:
+        #         for r in role:
+        #             slugs.append(r.slug)
+        #             if 'recruiter' in slugs:
+        #                 recruiters.append(user)
+        recruiters=User.query.filter(User.roles.any(slug='recruiter')).all()
+        return recruiters, HTTPStatus.OK
 
 
 @auth_namespace.route('/users')
 class GetAllUsers(Resource):
-    method_decorators = [auth_role_required('super-admin'), jwt_required()]
+    method_decorators = [auth_role_required(1), jwt_required()]
 
-    @auth_namespace.doc(description='Get all users')
+    @auth_namespace.marshal_with(user_model)
+    @auth_namespace.doc(description='Get all talent users')
     def get(self):
-        '''Get all users'''
-        users = User.query.all()
-        return users, HTTPStatus.OK
+        '''Get all talent users'''
+        # talents = []
+        # roles = []
+        # slugs = []
+        # users = User.query.all()
+        # for user in users:
+        #     roles.append(user.roles)
+        #     for role in roles:
+        #         for r in role:
+        #             slugs.append(r.slug)
+        #             if 'super-admin' and 'admin' and 'recruiter' in slugs:
+        #                 talents.append(user)
+        talents = User.query.all()
+        return talents, HTTPStatus.OK
 
 
 @auth_namespace.route('/users/me')
@@ -252,8 +311,8 @@ class UserAccount(Resource):
             'company': user.company,
             'roles': user_roles,
             'is_active': user.is_active,
-            'created_at': str(user.created_at),
-            'updated_at': str(user.updated_at)
+            'created_at': str(user.created_at.strftime('%Y-%m-%d')),
+            'updated_at': str(user.updated_at.strftime('%Y-%m-%d'))
                 }, HTTPStatus.OK
 
     @auth_namespace.expect(signup_model)
