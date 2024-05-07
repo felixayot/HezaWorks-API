@@ -6,13 +6,16 @@ from api.utils.jwt import jwt
 from api.models.user_roles import UserRole
 from api.models.talent_profile import TalentProfile
 from api.auth.decorators import auth_role_required
+from api.main.views import save_file, remove_file
 from flask import request
 from api.models.revoked_tokens import RevokedToken
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.exceptions import (
     Conflict, BadRequest, Unauthorized,
     NotFound)
+from werkzeug.datastructures import FileStorage, ImmutableDict
 from http import HTTPStatus
+import json
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -34,6 +37,19 @@ def token_in_blocklist_callback(jwt_header, jwt_data):
 
 auth_namespace=Namespace('auth',
                          description="a namespace for authentication")
+
+parser = auth_namespace.parser()
+parser.add_argument('resume', location='files',
+                           type=FileStorage, required=True)
+parser.add_argument('phone_number', location='form', type=str, required=True)
+parser.add_argument('address', location='form', type=str, required=True)
+parser.add_argument('city', location='form', type=str, required=True)
+parser.add_argument('education_level', location='form', type=str, required=True)
+parser.add_argument('institution', location='form', type=str, required=True)
+parser.add_argument('field', location='form', type=str, required=True)
+parser.add_argument('employer', location='form', type=str, required=True)
+parser.add_argument('title', location='form', type=str, required=True)
+parser.add_argument('responsibilities', location='form', type=str, required=True)
 
 signup_model=auth_namespace.model('Signup', {
     'first_name': fields.String(required=True, description='User first name'),
@@ -197,16 +213,26 @@ class WhoIs(Resource):
         '''
         user = User.query.filter_by(id=id).first()
         #user_roles=UserRole.query.filter_by(user_id=id).all()
+        if user == None:
+            raise NotFound('User Not Found.')
+
+        phone = ''
         user_roles=[role.id for role in user.roles]
+        for i in user.talent_profile:
+            phone=i.phone_number
         return {
             'message': 'User details retrieved successfully',
-            'current user details': {
-                'username': user.username,
-                'email': user.email,
-                'is_active': user.is_active,
-                'roles': user_roles
-                }
-            }, HTTPStatus.OK
+            'user_id': user.id,
+            'name': user.first_name + ' ' + user.last_name,
+            'username': user.username,
+            'company': user.company,
+            'email': user.email,
+            'phone': phone,
+            'created_at': user.created_at.strftime('%m-%d-%Y'),
+            'updated_at': user.updated_at.strftime('%m-%d-%Y'),
+            'is_active': str(user.is_active),
+            'roles': user_roles
+        }, HTTPStatus.OK
 
 
 @auth_namespace.route('/users/admins')
@@ -232,6 +258,42 @@ class GetAllAdmins(Resource):
         return admins, HTTPStatus.OK
 
 
+@auth_namespace.route('/users/admins/<int:id>')
+class GetSingleAdmin(Resource):
+    method_decorators = [auth_role_required(1), jwt_required()]
+
+    @auth_namespace.doc(description='Get admin user details by id', params={'id': 'User ID'})
+    def get(self, id):
+        '''
+            Get an admin user details by id
+        '''
+        user = User.query.filter_by(id=id).one_or_none()
+        #user_roles=UserRole.query.filter_by(user_id=id).all()
+        if user == None:
+            raise NotFound('User Not Found.')
+
+        phone = ''
+        user_roles=[role.id for role in user.roles]
+        if 2 not in user_roles:
+            raise NotFound('User Not an Admin.')
+        admin_user = user
+        for i in admin_user.talent_profile:
+            phone=i.phone_number
+        return {
+            'message': 'User details retrieved successfully',
+            'user_id': admin_user.id,
+            'name': admin_user.first_name + ' ' + admin_user.last_name,
+            'username': admin_user.username,
+            'company': admin_user.company,
+            'email': admin_user.email,
+            'phone': phone,
+            'created_at': admin_user.created_at.strftime('%m-%d-%Y'),
+            'updated_at': admin_user.updated_at.strftime('%m-%d-%Y'),
+            'is_active': str(admin_user.is_active),
+            'roles': user_roles
+        }, HTTPStatus.OK
+
+
 @auth_namespace.route('/users/inactive')
 class GetAllInactive(Resource):
     method_decorators = [auth_role_required([1, 2]), jwt_required()]
@@ -244,6 +306,39 @@ class GetAllInactive(Resource):
         return inactive, HTTPStatus.OK
 
 
+@auth_namespace.route('/users/inactive/<int:id>')
+class GetSingleInactive(Resource):
+    method_decorators = [auth_role_required([1, 2]), jwt_required()]
+
+    @auth_namespace.doc(description='Get inactive user details', params={'id': 'User ID'})
+    def get(self, id):
+        '''
+            Get inactive user details
+        '''
+        inactive_user = User.query.filter_by(id=id, is_active=False).one_or_none()
+        #user_roles=UserRole.query.filter_by(user_id=id).all()
+        if inactive_user == None:
+            raise NotFound('User Not Found.')
+
+        phone = ''
+        user_roles=[role.id for role in inactive_user.roles]
+        for i in inactive_user.talent_profile:
+            phone=i.phone_number
+        return {
+            'message': 'User details retrieved successfully',
+            'user_id': inactive_user.id,
+            'name': inactive_user.first_name + ' ' + inactive_user.last_name,
+            'username': inactive_user.username,
+            'company': inactive_user.company,
+            'email': inactive_user.email,
+            'phone': phone,
+            'created_at': inactive_user.created_at.strftime('%m-%d-%Y'),
+            'updated_at': inactive_user.updated_at.strftime('%m-%d-%Y'),
+            'is_active': str(inactive_user.is_active),
+            'roles': user_roles
+        }, HTTPStatus.OK
+
+
 @auth_namespace.route('/users/recruiters')
 class GetAllRecruiters(Resource):
     method_decorators = [auth_role_required([1, 2]), jwt_required()]
@@ -252,20 +347,45 @@ class GetAllRecruiters(Resource):
     @auth_namespace.doc(description='Get all recruiters')
     def get(self):
         '''Get all recruiters'''
-        # recruiters = []
-        # roles = []
-        # slugs = []
-        # user_roles = []
-        # users = User.query.all()
-        # for user in users:
-        #     roles.append(user.roles)
-        #     for role in roles:
-        #         for r in role:
-        #             slugs.append(r.slug)
-        #             if 'recruiter' in slugs:
-        #                 recruiters.append(user)
+
         recruiters=User.query.filter(User.roles.any(slug='recruiter')).all()
         return recruiters, HTTPStatus.OK
+
+
+@auth_namespace.route('/users/recruiters/<int:id>')
+class GetSingleRecruiter(Resource):
+    method_decorators = [auth_role_required([1, 2]), jwt_required()]
+
+    @auth_namespace.doc(description='Get a recruiter details by id', params={'id': 'User ID'})
+    def get(self, id):
+        '''
+            Get a recruiter details by id
+        '''
+        user = User.query.filter_by(id=id).one_or_none()
+        #user_roles=UserRole.query.filter_by(user_id=id).all()
+        if user == None:
+            raise NotFound('User Not Found.')
+
+        phone = ''
+        user_roles=[role.id for role in user.roles]
+        if 3 not in user_roles:
+            raise NotFound('User Not a recruiter.')
+        recruiter = user
+        for i in recruiter.talent_profile:
+            phone=i.phone_number
+        return {
+            'message': 'User details retrieved successfully',
+            'user_id': recruiter.id,
+            'name': recruiter.first_name + ' ' + recruiter.last_name,
+            'username': recruiter.username,
+            'company': recruiter.company,
+            'email': recruiter.email,
+            'phone': phone,
+            'created_at': recruiter.created_at.strftime('%m-%d-%Y'),
+            'updated_at': recruiter.updated_at.strftime('%m-%d-%Y'),
+            'is_active': str(recruiter.is_active),
+            'roles': user_roles
+        }, HTTPStatus.OK
 
 
 @auth_namespace.route('/users')
@@ -310,7 +430,7 @@ class UserAccount(Resource):
             'email': current_user.email,
             'company': user.company,
             'roles': user_roles,
-            'is_active': user.is_active,
+            'is_active': str(user.is_active),
             'created_at': str(user.created_at.strftime('%Y-%m-%d')),
             'updated_at': str(user.updated_at.strftime('%Y-%m-%d'))
                 }, HTTPStatus.OK
@@ -359,26 +479,46 @@ class UserAccount(Resource):
 @auth_namespace.route('/user/talentprofile')
 class CreateTalentProfile(Resource):
     @auth_namespace.expect(talentprofile_model)
+    @auth_namespace.expect(parser)
     @auth_namespace.marshal_with(talentprofile_model)
     @auth_namespace.doc(description='Create a talent profile')
     @jwt_required()
     def post(self):
         if current_user.is_active == False:
             raise Unauthorized('User is not active.')
+        if current_user.talent_profile != []:
+            raise Conflict('Profile already exists. Update instead.')
 
-        data = auth_namespace.payload
+        # data = auth_namespace.payload()
+        # data=request.get_json()
+        # data = request.form
+        # data = json.loads('["body"]')
+        
+        data = parser.parse_args()
+        uploaded_file = data['resume']
+        resume_fn = save_file(uploaded_file)
+
         if not data:
             raise BadRequest('No data provided.')
-        if not data['resume'] or not data['phone_number'] \
+        if not data['phone_number'] \
             or not data['address'] or not data['city'] \
                 or not data['education_level'] \
                     or not data['institution'] or not data['field'] \
                         or not data['employer'] or not data['title'] \
                             or not data['responsibilities']:
             raise BadRequest('Missing data.')
+
+            # raise BadRequest('Failed to save file. The file is either larger \
+            # than 2MB or file type not allowed.') from e
+            # if e.code == 413:
+            #     return {'error': 'File too large. Max size is 2MB'}, 413
+            # if e.code == 400:
+            #     return {
+            #         'error': 'Invalid file type. Allowed extensions are pdf, doc, docx'
+            #         }, 400
         try:
             talentprofile = TalentProfile(
-                resume=data['resume'],
+                resume=resume_fn,
                 phone_number=data['phone_number'],
                 address=data['address'],
                 city=data['city'],
@@ -400,13 +540,14 @@ class CreateTalentProfile(Resource):
     @jwt_required()
     def get(self):
         '''Get user talent profile'''
-        try:
-            talentprofile = TalentProfile.query.filter_by(user_id=current_user.id).one_or_none()
-            return talentprofile, HTTPStatus.OK
-        except:
+        
+        talentprofile = TalentProfile.query.filter_by(user_id=current_user.id).one_or_none()
+        if talentprofile == None:
             raise NotFound('Profile Not Found.')
+        return talentprofile, HTTPStatus.OK
 
     @auth_namespace.expect(talentprofile_model)
+    @auth_namespace.expect(parser)
     @auth_namespace.marshal_with(talentprofile_model)
     @auth_namespace.doc(description='Create a talent profile')
     @jwt_required()
@@ -417,10 +558,17 @@ class CreateTalentProfile(Resource):
             raise Unauthorized('User is not active.')
 
         profile_to_update = TalentProfile.query.filter_by(user_id=current_user.id).one_or_none()
-        data = auth_namespace.payload
+        if not profile_to_update:
+            raise NotFound('Profile Not Found. You need to create one first.')
+
+        data = parser.parse_args()
+        uploaded_file = data['resume']
+        fn = save_file(uploaded_file)
+        
         try:
             if data['resume']:
-                profile_to_update.resume = data['resume']
+                remove_file(profile_to_update.resume)
+                profile_to_update.resume = fn
             profile_to_update.resume = profile_to_update.resume
             if data['phone_number']:
                 profile_to_update.phone_number = data['phone_number']
@@ -454,7 +602,6 @@ class CreateTalentProfile(Resource):
         except Exception as e:
             raise BadRequest('Failed to update profile.') from e
 
-
 @auth_namespace.route('/users/talentlist')
 class GetAllTalentUsers(Resource):
     method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
@@ -484,6 +631,35 @@ class GetAllTalentUsers(Resource):
                     'responsibilities': p.responsibilities
                 })
             return talents, HTTPStatus.OK
+        except Exception as e:
+            raise NotFound('No talent profiles found') from e
+
+
+@auth_namespace.route('/users/talentlist/<int:id>')
+class GetATalentUser(Resource):
+    method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
+
+    @auth_namespace.doc(description='Get a talent user by id')
+    def get(self, id):
+        '''Get a talent user by id'''
+        if current_user.is_active == False:
+            raise Unauthorized('User is not active.')
+        try:
+            profile = TalentProfile.query.filter_by(user_id=id).one_or_none()
+            return ({
+                'id': profile.user_id,
+                'name': profile.owner.first_name + ' ' + profile.owner.last_name,
+                'email': profile.owner.email,
+                'resume': profile.resume,
+                'phone': profile.phone_number,
+                'city': profile.city,
+                'education_level': profile.education_level,
+                'institution': profile.institution,
+                'field': profile.field,
+                'employer': profile.employer,
+                'title': profile.title,
+                'responsibilities': profile.responsibilities
+            }), HTTPStatus.OK
         except Exception as e:
             raise NotFound('No talent profiles found') from e
 
@@ -520,34 +696,47 @@ class MakeAdmin(Resource):
 @auth_namespace.route('/users/deactivate/<int:id>')
 class DeactivateUser(Resource):
     method_decorators = [auth_role_required([1, 2]), jwt_required()]
-    @auth_namespace.marshal_with(user_model)
+    # @auth_namespace.marshal_with(user_model)
     @auth_namespace.doc(description='Deactivate a user by id', params={'id': 'A user ID'})
     def put(self, id):
         '''Deactivate a user by id'''
         user = User.query.filter_by(id=id).first()
         user.deactivate()
-        return user, HTTPStatus.OK
-
+        return {
+            'message': 'User deactivated successfully.',
+            'Username': user.username,
+            'Email': user.email,
+            'Is Active': user.is_active
+        }, HTTPStatus.OK
 
 @auth_namespace.route('/users/activate/<int:id>')
 class ActivateUser(Resource):
     method_decorators = [auth_role_required([1, 2]), jwt_required()]
-    @auth_namespace.marshal_with(user_model)
+    # @auth_namespace.marshal_with(user_model)
     @auth_namespace.doc(description='Activate a user by id', params={'id': 'A user ID'})
     def put(self, id):
         '''Activate a user by id'''
         user = User.query.filter_by(id=id).first()
         user.activate()
-        return user, HTTPStatus.OK
+        return {
+            'message': 'User activated successfully.',
+            'Username': user.username,
+            'Email': user.email,
+            'Is Active': user.is_active
+        }, HTTPStatus.OK
     
 
 @auth_namespace.route('/users/delete/<int:id>')
 class DeleteUser(Resource):
     method_decorators = [auth_role_required(1), jwt_required()]
-    @auth_namespace.marshal_with(user_model)
+    # @auth_namespace.marshal_with(user_model)
     @auth_namespace.doc(description='Delete a user by id', params={'id': 'A user ID'})
     def delete(self, id):
         '''Delete a user by id'''
         user = User.query.filter_by(id=id).first()
         user.delete()
-        return user, HTTPStatus.OK
+        return {
+            'message': 'User deleted successfully.',
+            'Username': user.username,
+            'Email': user.email
+        }, HTTPStatus.OK

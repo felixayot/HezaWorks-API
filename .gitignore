@@ -4,3 +4,4 @@ __pycache__/
 heza.db
 .env
 migrations/
+static

@@ -7,7 +7,8 @@ from api.models.users import User
 from api.models.applications import Application, Status
 from api.auth.decorators import auth_role_required
 from werkzeug.exceptions import (
-    Unauthorized, BadRequest, Forbidden, NotFound
+    Unauthorized, BadRequest, Forbidden, NotFound,
+    Conflict
     )
 from flask_jwt_extended import jwt_required, current_user
 from http import HTTPStatus
@@ -40,7 +41,7 @@ def user_lookup_callback(_jwt_header, jwt_data):
 
 
 @jobs_namespace.route('/posts')
-class GetJobposts(Resource):
+class GetAllJobposts(Resource):
     '''Class for Jobposts endpoint.'''
     def get(self):
         '''
@@ -61,6 +62,29 @@ class GetJobposts(Resource):
                     'expires_on': j.expires_on.strftime('%m-%d-%Y')
                 })
             return posts, HTTPStatus.OK
+        except Exception as e:
+            raise NotFound('No job posts found') from e
+
+@jobs_namespace.route('/posts/<int:id>')
+@jobs_namespace.doc(description='Retrieve a single job post by id',
+                    params={'id': 'A job post ID'})
+class GetSingleJobpost(Resource):
+    '''Class for A Jobpost endpoint.'''
+    def get(self, id):
+        '''
+            Get a single job post by id
+        '''
+        try:
+            job = JobPost.query.filter_by(id=id).one_or_none()
+            return ({
+                    'id': job.id,
+                    'title': job.title,
+                    'organization': job.organization,
+                    'description': job.description,
+                    'requirements': job.requirements,
+                    'posted_at': job.posted_at.strftime('%m-%d-%Y'),
+                    'expires_on': job.expires_on.strftime('%m-%d-%Y')
+                }), HTTPStatus.OK
         except Exception as e:
             raise NotFound('No job posts found') from e
 
@@ -117,13 +141,15 @@ class ProtectedJobpostRoutes(Resource):
 @jobs_namespace.route('/posts/job/<int:id>')
 class ProtectedJobRUD(Resource):
     method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
+
     @jobs_namespace.expect(jobposts_model)
     @jobs_namespace.marshal_with(jobposts_model)
     def put(self, id):
         '''
             Update a single job post
         '''
-        post_to_update = JobPost.get_job_by_id(id)
+        post_to_update = JobPost.query.filter_by(id=id, user_id=current_user.id).one_or_none()
+        # post_to_update = JobPost.get_job_by_id(id)
         data = jobs_namespace.payload
         try:
             if data['title']:
@@ -138,6 +164,12 @@ class ProtectedJobRUD(Resource):
                 post_to_update.requirements = data['requirements']
             post_to_update.requirements = post_to_update.requirements
 
+            if data['expires_on']:
+                expiredate = data['expires_on']
+                expiredate = datetime.strptime(expiredate, '%Y-%m-%d')
+                post_to_update.expires_on = expiredate
+            post_to_update.requirements = post_to_update.requirements
+
             db.session.commit()
 
             return post_to_update, HTTPStatus.OK
@@ -148,14 +180,17 @@ class ProtectedJobRUD(Resource):
         '''
             Delete a single job post
         '''
-        post_to_delete = JobPost.get_job_by_id(id)
-        try:
-            post_to_delete.delete()
-            return {
-                'message': 'Job post deleted successfully'
-            }, HTTPStatus.OK
-        except Exception as e:
-            raise Forbidden('You do not have sufficient roles to delete this job post.')
+        post_to_delete = JobPost.query.filter_by(id=id, user_id=current_user.id).one_or_none()
+        if post_to_delete.applicants != []:
+            raise Forbidden('You cannot delete a job post with applications')
+        if post_to_delete is None:
+            raise NotFound('Job post not found')
+        
+        post_to_delete.delete()
+        return {
+            'message': 'Job post deleted successfully'
+        }, HTTPStatus.OK
+
 
 
 @jobs_namespace.route('/posts/job/<int:id>/apply')
@@ -166,19 +201,26 @@ class ApplyForJob(Resource):
             Apply for a job post
         '''
         job_to_apply = JobPost.get_job_by_id(id)
+        user_roles = []
+        for role in current_user.roles:
+            user_roles.append(role.slug)
+        if 'recruiter' in user_roles:
+            raise Forbidden('Your account is currently set to a recruiter, \
+                            hence you cannot apply for a job post')
+        # This check applies to user roles above recruiter
         if job_to_apply.author == current_user:
             raise BadRequest('You cannot apply for your own job post')
-        elif current_user.is_active == False:
+        if current_user.is_active == False:
             raise Unauthorized('Your account is deactivated. Please contact the administrator.')
-        elif Application.query.filter_by(job_id=id, user_id=current_user.id).one_or_none():
+        if current_user.talent_profile == []:
+            raise Forbidden('You need to create a talent profile to apply for a job post')
+        if Application.query.filter_by(job_id=id, user_id=current_user.id).one_or_none():
             raise BadRequest('You have already applied for this job post')
-            #if job_to_apply.expires_on < datetime.now():
-            # raise BadRequest('This job post has expired')
-        else:
+        try:
             applctn = Application(
-                job_post=job_to_apply,
-                applicant=current_user,
-            )
+                    job_post=job_to_apply,
+                    applicant=current_user,
+                )
             applctn.save()
             return {
                 'message': 'Application successful',
@@ -187,7 +229,12 @@ class ApplyForJob(Resource):
                 'job_title': job_to_apply.title,
                 'applicant': current_user.username,
                 'status': applctn.status.value
-            }, HTTPStatus.CREATED
+                }, HTTPStatus.CREATED
+        except Exception as e:
+            if Application.query.filter_by\
+                (job_id=id, user_id=current_user.id).one_or_none():
+            # raise BadRequest('You have already applied for this job post')
+                raise Conflict('A similar request is underway') from e
 
 
 @jobs_namespace.route('/posts/job/<int:id>/applicants')
@@ -225,20 +272,45 @@ class GetJobpostsByUser(Resource):
             }#, HTTPStatus.UNAUTHORIZED
         page = request.args.get('page', 1, type=int)
         posts = []
+        jobs = JobPost.query.filter_by(author=current_user).\
+            order_by(JobPost.posted_at.desc()).\
+                paginate(page=page, per_page=4)
+        if list(jobs) == []:
+            raise NotFound('No job posts found')
+        for j in jobs:
+            posts.append({
+                'id': j.id,
+                'title': j.title,
+                'description': j.description,
+                'requirements': j.requirements,
+                'posted_at': j.posted_at.strftime('%m-%d-%Y'),
+                'expires_on': j.expires_on.strftime('%m-%d-%Y')
+                })
+        return posts, HTTPStatus.OK
+
+
+@jobs_namespace.route('/user/myposts/<int:id>')
+class GetAUserJobpost(Resource):
+    method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
+    def get(self, id):
+        '''
+            Get a single user post by id
+        '''
+        if not current_user:
+            return {
+                'message': 'You are not perform this action. Please login.'
+            }#, HTTPStatus.UNAUTHORIZED
+
         try:
-            jobs = JobPost.query.filter_by(author=current_user).\
-                order_by(JobPost.posted_at.desc()).\
-                    paginate(page=page, per_page=4)
-            for j in jobs:
-                posts.append({
-                    'id': j.id,
-                    'title': j.title,
-                    'description': j.description,
-                    'requirements': j.requirements,
-                    'posted_at': j.posted_at.strftime('%m-%d-%Y'),
-                    'expires_on': j.expires_on.strftime('%m-%d-%Y')
-                    })
-            return posts, HTTPStatus.OK
+            job = JobPost.query.filter_by(id=id, author=current_user).one_or_none()
+            return {
+                'id': job.id,
+                'title': job.title,
+                'description': job.description,
+                'requirements': job.requirements,
+                'posted_at': job.posted_at.strftime('%m-%d-%Y'),
+                'expires_on': job.expires_on.strftime('%m-%d-%Y')
+                }, HTTPStatus.OK
         except Exception as e:
             raise NotFound('No job posts found') from e
 
@@ -305,6 +377,7 @@ class GetApplicationById(Resource):
         return {
             'application_id': application.id,
             'job_id': application.job_id,
+            'applicant_id': application.applicant.id,
             'job_title': application.job_post.title,
             'applicant': application.applicant.email,
             'status': application.status.value,
@@ -328,6 +401,7 @@ class ManageApplications(Resource):
         return {
             'application_id': application.id,
             'job_id': application.job_id,
+            'applicant_id': application.applicant.id,
             'job_title': application.job_post.title,
             'applicant': application.applicant.email,
             'status': application.status.value,
