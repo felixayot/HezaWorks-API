@@ -478,7 +478,6 @@ class UserAccount(Resource):
 
 @auth_namespace.route('/user/talentprofile')
 class CreateTalentProfile(Resource):
-    @auth_namespace.expect(talentprofile_model)
     @auth_namespace.expect(parser)
     @auth_namespace.marshal_with(talentprofile_model)
     @auth_namespace.doc(description='Create a talent profile')

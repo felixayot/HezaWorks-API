@@ -23,7 +23,10 @@ main_namespace=Namespace('main', description="a namespace for the main API")
 
 upload_parser = main_namespace.parser()
 upload_parser.add_argument('file', location='files',
-                           type=FileStorage, required=True)
+                           type=FileStorage)
+upload_parser.add_argument('full_name', location='form', type=str, required=True)
+upload_parser.add_argument('age', location='form', type=str, required=True)
+
 
 """
 resume_model=main_namespace.model('ResumeUpload', {
@@ -92,6 +95,10 @@ class UploadResume(Resource):
         # print(payload)
         args = upload_parser.parse_args()
         uploaded_file = args['file'] # This is FileStorage instance
+        full_name = args['full_name']
+        age = args['age']
+        print(f'Full name: {full_name}')
+        print(f'Age: {age}')
         try:
             secure_fn = save_file(uploaded_file)
             save_path = UPLOAD_FOLDER + secure_fn
@@ -99,6 +106,8 @@ class UploadResume(Resource):
                 'message': 'Resume uploaded successfully',
                 'secure_file_name': secure_fn,
                 'file_path': save_path,
+                'full_name': full_name,
+                'age': age
                 }, 201
         except Exception as e:
             # if e.code == 413:
