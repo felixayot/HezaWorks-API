@@ -1,7 +1,10 @@
 '''Module for the API's main views.'''
 from flask_restx import Namespace, Resource, fields
 from werkzeug.datastructures import FileStorage
-from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
+from werkzeug.exceptions import (
+    BadRequest, RequestEntityTooLarge,
+    NotFound
+)
 import os
 from config import basedir
 import secrets
@@ -142,7 +145,10 @@ class ViewResume(Resource):
     # @main_namespace.marshal_with(upload_parser)
     def get(self, filename):
         '''Get a resume.'''
-        return get_file(filename)
+        try:
+            return get_file(filename)
+        except Exception:
+            return {'message': 'File not found'}, 404
 
     def delete(self, filename):
         '''Delete a resume.'''
