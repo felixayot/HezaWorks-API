@@ -59,7 +59,8 @@ class GetAllJobposts(Resource):
                     'description': j.description,
                     'requirements': j.requirements,
                     'posted_at': j.posted_at.strftime('%m-%d-%Y'),
-                    'expires_on': j.expires_on.strftime('%m-%d-%Y')
+                    'expires_on': j.expires_on.strftime('%m-%d-%Y'),
+                    'count': jobs.total
                 })
             return posts, HTTPStatus.OK
         except Exception as e:
@@ -284,7 +285,8 @@ class GetJobpostsByUser(Resource):
                 'description': j.description,
                 'requirements': j.requirements,
                 'posted_at': j.posted_at.strftime('%m-%d-%Y'),
-                'expires_on': j.expires_on.strftime('%m-%d-%Y')
+                'expires_on': j.expires_on.strftime('%m-%d-%Y'),
+                'count': jobs.total
                 })
         return posts, HTTPStatus.OK
 

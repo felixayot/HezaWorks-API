@@ -613,7 +613,7 @@ class GetAllTalentUsers(Resource):
         talents = []
         page = request.args.get('page', 1, type=int)
         try:
-            profiles = TalentProfile.query.paginate(page=page, per_page=6)
+            profiles = TalentProfile.query.paginate(page=page, per_page=4)
             for p in profiles:
                 talents.append({
                     'id': p.user_id,
@@ -627,7 +627,8 @@ class GetAllTalentUsers(Resource):
                     'field': p.field,
                     'employer': p.employer,
                     'title': p.title,
-                    'responsibilities': p.responsibilities
+                    'responsibilities': p.responsibilities,
+                    'count': profiles.total
                 })
             return talents, HTTPStatus.OK
         except Exception as e:
