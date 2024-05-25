@@ -246,8 +246,10 @@ class GetApplicants(Resource):
             Get all applicants for a job post
         '''
         apps = []
+        page = request.args.get('page', 1, type=int)
         job = JobPost.get_job_by_id(id)
-        applctns = Application.query.filter_by(job_post=job).all()
+        applctns = Application.query.filter_by(job_post=job).\
+            paginate(page=page, per_page=10)
         for a in applctns:
             apps.append({
                 'application_id': a.id,
@@ -255,7 +257,8 @@ class GetApplicants(Resource):
                 'job_title': a.job_post.title,
                 'applicant': a.applicant.email,
                 'status': a.status.value,
-                'applied_at': a.applied_at.strftime('%m-%d-%Y')
+                'applied_at': a.applied_at.strftime('%m-%d-%Y'),
+                'count': applctns.total
             })
         return apps, HTTPStatus.OK
     
@@ -324,21 +327,26 @@ class GetAllApplicants(Resource):
         '''
             Get all job applications to all jobs for a single user.
         '''
+        # page = request.args.get('page', 1, type=int)
         jobs = current_user.jobposts
+        # all_applicants = Applicants.query.filter_by(job_id=j.id for j in jobs).\
+        #     order_by(Application.applied_at.desc()).paginate(page=page, per_page=10)
         applications = []
         job_applicants = []
         for j in jobs:
             applications.append(j.applicants)
-        for applicants in applications:
-            for a in applicants:
+        for applicant in applications:
+            for a in applicant:
                 job_applicants.append({
                     'application_id': a.id,
                     'job_id': a.job_id,
                     'title': a.job_post.title,
                     'applicant': a.applicant.email,
                     'status': a.status.value,
-                    'applied_at': a.applied_at.strftime('%m-%d-%Y')
+                    'applied_at': a.applied_at.strftime('%m-%d-%Y'),
+                    'count': len(job_applicants),
                 })
+        # print(len(job_applicants))
         return job_applicants, HTTPStatus.OK
 
 
@@ -350,14 +358,17 @@ class GetApplicationsByUser(Resource):
             Get all job applications for a user
         '''
         myapps = []
-        applctns = current_user.applications
+        page = request.args.get('page', 1, type=int)
+        applctns = Application.query.filter_by(applicant=current_user).\
+            order_by(Application.applied_at.desc()).paginate(page=page, per_page=10)
         for a in applctns:
             myapps.append({
                 'application_id': a.id,
                 'job_id': a.job_post.id,
                 'job_title': a.job_post.title,
                 'status': a.status.value,
-                'applied_at': a.applied_at.strftime('%m-%d-%Y')
+                'applied_at': a.applied_at.strftime('%m-%d-%Y'),
+                'count': applctns.total
             })
         return myapps, HTTPStatus.OK
 
