@@ -1,5 +1,5 @@
 from flask_restx import Namespace, Resource, fields
-from flask import request
+from flask import request, abort
 from api.utils.db import db
 from api.utils.jwt import jwt
 from api.models.job_posts import JobPost
@@ -12,6 +12,7 @@ from werkzeug.exceptions import (
     )
 from flask_jwt_extended import jwt_required, current_user
 from http import HTTPStatus
+from api.main.views import paginate
 from datetime import datetime
 
 jobs_namespace=Namespace('jobs', description="a namespace for job posts")
@@ -65,6 +66,37 @@ class GetAllJobposts(Resource):
             return posts, HTTPStatus.OK
         except Exception as e:
             raise NotFound('No job posts found') from e
+
+
+@jobs_namespace.route('/posts/search')
+class GetAllJobposts(Resource):
+    '''Class for Jobposts search endpoint.'''
+    # @jobs_namespace.marshal_with(jobposts_model)
+    def post(self):
+        '''
+            Get all job posts
+        '''
+        posts = []
+        data = request.form['search']
+        search_str = '%' + data + '%'
+        try:
+            jobs = JobPost.query.filter(JobPost.title.like(search_str)).all()
+            for j in jobs:
+                posts.append({
+                    'id': j.id,
+                    'title': j.title,
+                    'organization': j.organization,
+                    'description': j.description,
+                    'requirements': j.requirements,
+                    'posted_at': j.posted_at.strftime('%m-%d-%Y'),
+                    'expires_on': j.expires_on.strftime('%m-%d-%Y')
+                })
+            return posts, HTTPStatus.OK
+            # return jobs, HTTPStatus.OK
+        except Exception as e:
+            return {'error': 'Not Found',
+                    'message': 'No job posts found using the provided keyword'}, HTTPStatus.NOT_FOUND
+
 
 @jobs_namespace.route('/posts/<int:id>')
 @jobs_namespace.doc(description='Retrieve a single job post by id',
@@ -234,9 +266,7 @@ class ApplyForJob(Resource):
         except Exception as e:
             if Application.query.filter_by\
                 (job_id=id, user_id=current_user.id).one_or_none():
-            # raise BadRequest('You have already applied for this job post')
-                raise Conflict('A similar request is underway') from e
-
+                abort(409, 'You have already applied for this job post')
 
 @jobs_namespace.route('/posts/job/<int:id>/applicants')
 class GetApplicants(Resource):
@@ -327,7 +357,7 @@ class GetAllApplicants(Resource):
         '''
             Get all job applications to all jobs for a single user.
         '''
-        # page = request.args.get('page', 1, type=int)
+        page = request.args.get('page', 1, type=int)
         jobs = current_user.jobposts
         # all_applicants = Applicants.query.filter_by(job_id=j.id for j in jobs).\
         #     order_by(Application.applied_at.desc()).paginate(page=page, per_page=10)
@@ -344,10 +374,12 @@ class GetAllApplicants(Resource):
                     'applicant': a.applicant.email,
                     'status': a.status.value,
                     'applied_at': a.applied_at.strftime('%m-%d-%Y'),
-                    'count': len(job_applicants),
+                    'count': len(applications),
                 })
-        # print(len(job_applicants))
-        return job_applicants, HTTPStatus.OK
+        paginated_job_applicants = paginate(job_applicants, page, 10)
+        # print('Raw Dataset Total: ',len(applications))
+        # print('Paginated Data Total: ',len(paginated_job_applicants))
+        return paginated_job_applicants, HTTPStatus.OK
 
 
 @jobs_namespace.route('/user/myapplications')

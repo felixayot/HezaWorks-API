@@ -75,6 +75,16 @@ def save_file(form_file) -> str:
     return resume_fn
 
 
+from typing import List
+def paginate(dataset: List, page: int, per_page: int) -> List:
+    '''Paginate a dataset.'''
+    end = page * per_page
+    start = end - per_page
+    index_range = start, end
+
+    return dataset[index_range[0]:index_range[1]]
+
+
 @main_namespace.route('/status')
 class Status(Resource):
     '''Resource for checking the API's status.'''
