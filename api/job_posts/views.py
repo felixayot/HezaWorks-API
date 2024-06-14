@@ -44,6 +44,7 @@ def user_lookup_callback(_jwt_header, jwt_data):
 @jobs_namespace.route('/posts')
 class GetAllJobposts(Resource):
     '''Class for Jobposts endpoint.'''
+    @jobs_namespace.doc(description='Get all job posts')
     def get(self):
         '''
             Get all job posts
@@ -133,12 +134,13 @@ class JobRUDbyId(Resource):
         return JobPost.get_job_by_id(id), HTTPStatus.OK
 
 
-@jobs_namespace.route('/posts')
+@jobs_namespace.route('/create')
 class ProtectedJobpostRoutes(Resource):
     '''Represents Endpoint for jobpost creation.'''
     method_decorators = [auth_role_required([1, 2, 3]), jwt_required()]
     @jobs_namespace.expect(jobposts_model)
     @jobs_namespace.marshal_with(jobposts_model)
+    @jobs_namespace.doc(description='Create a new job post')
     def post(self):
         '''
             Create a new job post
